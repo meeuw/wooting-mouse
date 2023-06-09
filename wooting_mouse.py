@@ -1,0 +1,114 @@
+"""
+Script to use Wooting Gamepad as Mouse
+"""
+import asyncio
+import collections
+import signal
+import sys
+
+import evdev
+import pyudev
+
+
+class Mouse:
+    """
+    Virtual Mouse
+    """
+
+    def __init__(self, state):
+        self.ui_mouse = evdev.UInput(
+            evdev.util.find_ecodes_by_regex(
+                r"(REL_X|REL_Y|REL_WHEEL|REL_WHEEL_HI_RES|"
+                r"BTN_RIGHT|BTN_MIDDLE|BTN_LEFT|KEY_CAPSLOCK)$"
+            )
+        )
+        self.state = state
+
+    def handle(self, from_event, to_event):
+        """
+        Handle event, translate analog keypress to relative movement
+        """
+        value = self.state[evdev.ecodes.ecodes["EV_ABS"]][from_event]
+
+        abs_value = abs(value)
+        if abs_value > 10:
+            if value < 0:
+                direction = -1
+            else:
+                direction = 1
+            value = int(0.0000000000000000005 * pow(abs_value, 4.5) + 1)
+            self.ui_mouse.write(
+                evdev.ecodes.ecodes["EV_REL"], to_event, value * direction
+            )
+
+    def write(self, typ: int, code: int, value: int) -> None:
+        """
+        Write event
+        """
+        self.ui_mouse.write(typ, code, value)
+
+    async def run(self) -> None:
+        """
+        Main loop
+        """
+        while True:
+            await asyncio.sleep(0.05)
+            self.handle(evdev.ecodes.ecodes["ABS_X"], evdev.ecodes.ecodes["REL_X"])
+            self.handle(evdev.ecodes.ecodes["ABS_Y"], evdev.ecodes.ecodes["REL_Y"])
+            self.handle(
+                evdev.ecodes.ecodes["ABS_RY"], evdev.ecodes.ecodes["REL_WHEEL_HI_RES"]
+            )
+
+            self.ui_mouse.syn()
+
+
+async def gamepad(wooting_gamepad, state, mouse):
+    """
+    Watch Gamepad events
+    """
+    ev_key = evdev.ecodes.ecodes["EV_KEY"]
+    async for event in wooting_gamepad.async_read_loop():
+        state[event.type][event.code] = event.value
+
+        if event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_SOUTH"]:
+            mouse.write(
+                ev_key,
+                evdev.ecodes.ecodes["KEY_CAPSLOCK"],
+                event.value,
+            )
+        if event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_EAST"]:
+            mouse.write(ev_key, evdev.ecodes.ecodes["BTN_LEFT"], event.value)
+        if event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_NORTH"]:
+            mouse.write(ev_key, evdev.ecodes.ecodes["BTN_MIDDLE"], event.value)
+        if event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_WEST"]:
+            mouse.write(ev_key, evdev.ecodes.ecodes["BTN_RIGHT"], event.value)
+
+
+def main():
+    """
+    Main function
+    """
+    context = pyudev.Context()
+    # run: udevadm info -t
+    # search for "event-joystick"
+    # Use the child of this device (event*) (P:):
+    # /devices/pci0000:00/0000:00:14.0/usb2/2-5/2-5.2/2-5.2:1.0/input/input33/event3
+    udev = pyudev.Devices.from_path(context, sys.argv[1])
+    wooting_gamepad = evdev.InputDevice(udev.device_node)
+
+    state = {
+        evdev.ecodes.ecodes["EV_SYN"]: collections.defaultdict(int),
+        evdev.ecodes.ecodes["EV_ABS"]: collections.defaultdict(int),
+        evdev.ecodes.ecodes["EV_KEY"]: collections.defaultdict(int),
+    }
+    mouse = Mouse(state)
+
+    tasks = asyncio.gather(
+        mouse.run(),
+        gamepad(wooting_gamepad, state, mouse),
+    )
+
+    loop = asyncio.get_event_loop()
+    loop.add_signal_handler(signal.SIGTERM, tasks.cancel)
+
+    loop.run_until_complete(tasks)

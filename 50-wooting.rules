@@ -1,0 +1,1 @@
+SUBSYSTEM=="input", ATTRS{name}=="Wooting 60HE (ARM)", KERNEL=="event*" TAG+="systemd", ENV{SYSTEMD_WANTS}="wooting-mouse@"

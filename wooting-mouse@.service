@@ -1,0 +1,9 @@
+[Unit]
+Description=Wooting Mouse daemon
+
+[Service]
+Type=simple
+ExecStart=/usr/local/venv/wooting-mouse-3.11/bin/wooting-mouse /%I
+StandardOutput=journald
+StandardError=journald
+Environment="PYTHONUNBUFFERED=1"
