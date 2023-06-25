@@ -5,6 +5,8 @@ import asyncio
 import collections
 import signal
 import sys
+import d0da.device_linux as d0da_device
+import d0da.d0da_feature
 
 import evdev
 import pyudev
@@ -15,7 +17,7 @@ class Mouse:
     Virtual Mouse
     """
 
-    def __init__(self, state):
+    def __init__(self, state, device):
         self.ui_mouse = evdev.UInput(
             evdev.util.find_ecodes_by_regex(
                 r"(REL_X|REL_Y|REL_WHEEL|REL_WHEEL_HI_RES|"
@@ -23,6 +25,9 @@ class Mouse:
             )
         )
         self.state = state
+        self.device = device
+        self.enabled = False
+        self.enable_event = asyncio.Event()
 
     def handle(self, from_event, to_event):
         """
@@ -52,7 +57,11 @@ class Mouse:
         Main loop
         """
         while True:
-            await asyncio.sleep(0.05)
+            if self.enabled:
+                await asyncio.sleep(0.05)
+            else:
+                await self.enable_event.wait()
+
             self.handle(evdev.ecodes.ecodes["ABS_X"], evdev.ecodes.ecodes["REL_X"])
             self.handle(evdev.ecodes.ecodes["ABS_Y"], evdev.ecodes.ecodes["REL_Y"])
             self.handle(
@@ -61,13 +70,25 @@ class Mouse:
 
             self.ui_mouse.syn()
 
+    def enable(self):
+        self.enabled = True
+        self.enable_event.set()
+
+    def disable(self):
+        self.device.send_feature(d0da.d0da_feature.activate_profile(0))
+        self.enabled = False
+        self.enable_event.clear()
+
 
 async def gamepad(wooting_gamepad, state, mouse):
     """
     Watch Gamepad events
     """
     ev_key = evdev.ecodes.ecodes["EV_KEY"]
+
     async for event in wooting_gamepad.async_read_loop():
+        if event.value > 0:
+            mouse.enable()
         state[event.type][event.code] = event.value
 
         if event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_SOUTH"]:
@@ -78,10 +99,16 @@ async def gamepad(wooting_gamepad, state, mouse):
             )
         if event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_EAST"]:
             mouse.write(ev_key, evdev.ecodes.ecodes["BTN_LEFT"], event.value)
-        if event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_NORTH"]:
+        elif event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_NORTH"]:
             mouse.write(ev_key, evdev.ecodes.ecodes["BTN_MIDDLE"], event.value)
-        if event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_WEST"]:
+        elif event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_WEST"]:
             mouse.write(ev_key, evdev.ecodes.ecodes["BTN_RIGHT"], event.value)
+        elif (
+            event.type == ev_key
+            and event.code == evdev.ecodes.ecodes["BTN_START"]
+            and event.value > 0
+        ):
+            mouse.disable()
 
 
 def main():
@@ -101,7 +128,9 @@ def main():
         evdev.ecodes.ecodes["EV_ABS"]: collections.defaultdict(int),
         evdev.ecodes.ecodes["EV_KEY"]: collections.defaultdict(int),
     }
-    mouse = Mouse(state)
+    device = d0da_device.get_device("/".join(sys.argv[1].split("/")[:-4]))
+
+    mouse = Mouse(state, device)
 
     tasks = asyncio.gather(
         mouse.run(),

@@ -9,6 +9,7 @@ license = "GPL-v3"
 python = "^3.11"
 pyudev = "^0.24.1"
 evdev = "^1.6.1"
+d0da = {extras = ["linux"], version = "^0.3.0"}
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
