@@ -139,6 +139,18 @@ files = [
 ]
 
 [[package]]
+name = "hsluv"
+version = "5.0.3"
+description = "Human-friendly HSL"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "hsluv-5.0.3-py2.py3-none-any.whl", hash = "sha256:f4c31f4daeb9b48895abef992b9ed42ae24cd8753eb4f91556b0fa706385c6d1"},
+    {file = "hsluv-5.0.3.tar.gz", hash = "sha256:2586bcb61d29d76e89e563a6836df24d86939961c9657f129a59f7617de45377"},
+]
+
+[[package]]
 name = "ioctl-opt"
 version = "1.3"
 description = "Functions to compute fnctl.ioctl's opt argument"
@@ -437,4 +449,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "c9b9f662f07b447b6c5b2d1b6bf238554fa8f9e82b80490142f4b36ce15b9c2c"
+content-hash = "4562ddcf524ea97a9b7de057c0cd8c601861ee6d6cd30f4a2d4f98f2c4e778af"

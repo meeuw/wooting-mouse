@@ -5,11 +5,18 @@ import asyncio
 import collections
 import signal
 import sys
+import math
+import colorsys
+import time
+
 import d0da.device_linux as d0da_device
 import d0da.d0da_feature
+import d0da.d0da_report
 
 import evdev
 import pyudev
+
+import hsluv
 
 
 class Mouse:
@@ -35,16 +42,21 @@ class Mouse:
         """
         value = self.state[evdev.ecodes.ecodes["EV_ABS"]][from_event]
 
-        abs_value = abs(value)
-        if abs_value > 10:
-            if value < 0:
-                direction = -1
-            else:
-                direction = 1
-            value = int(0.0000000000000000005 * pow(abs_value, 4.5) + 1)
-            self.ui_mouse.write(
-                evdev.ecodes.ecodes["EV_REL"], to_event, value * direction
-            )
+        # abs_value = abs(value)
+        # if abs_value > 10:
+        #    if value < 0:
+        #        direction = -1
+        #    else:
+        #        direction = 1
+        #    value = int(0.0000000000000000005 * pow(abs_value, 4.5) + 1)
+        #    self.ui_mouse.write(
+        #        evdev.ecodes.ecodes["EV_REL"], to_event, value * direction
+        #    )
+        self.ui_mouse.write(
+            evdev.ecodes.ecodes["EV_REL"],
+            to_event,
+            int(math.tan(value * (math.pi / 2) / 33000) * 20),
+        )
 
     def write(self, typ: int, code: int, value: int) -> None:
         """
@@ -71,16 +83,22 @@ class Mouse:
             self.ui_mouse.syn()
 
     def enable(self):
+        """
+        Enable mouse
+        """
         self.enabled = True
         self.enable_event.set()
 
     def disable(self):
+        """
+        Disable mouse
+        """
         self.device.send_feature(d0da.d0da_feature.activate_profile(0))
         self.enabled = False
         self.enable_event.clear()
 
 
-async def gamepad(wooting_gamepad, state, mouse):
+async def gamepad(wooting_gamepad, state, mouse, rgb_lighting):
     """
     Watch Gamepad events
     """
@@ -89,6 +107,7 @@ async def gamepad(wooting_gamepad, state, mouse):
     async for event in wooting_gamepad.async_read_loop():
         if event.value > 0:
             mouse.enable()
+            rgb_lighting.mouse()
         state[event.type][event.code] = event.value
 
         if event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_SOUTH"]:
@@ -109,6 +128,62 @@ async def gamepad(wooting_gamepad, state, mouse):
             and event.value > 0
         ):
             mouse.disable()
+            time.sleep(0.1)
+            rgb_lighting.time_of_day()
+
+
+class RGBLighting:
+    """
+    RGB Lighting
+    """
+    def __init__(self, device):
+        self.device = device
+        self.time_of_day()
+        self.do_time_of_day = True
+
+    def time_of_day(self):
+        """
+        Color keyboard according to time of day
+        """
+        values = []
+        localtime = time.localtime()
+        hue = (localtime.tm_hour * 60 + localtime.tm_min) / (24 * 60)
+        rgb = colorsys.hls_to_rgb(hue, 0.5, 1)
+        hslv = hsluv.rgb_to_hsluv(rgb)
+        self.do_time_of_day = True
+
+        for i in range(21):
+            if i < 10:
+                rgbv = hsluv.hsluv_to_rgb((hslv[0] + 0, hslv[1], hslv[2]))
+            elif i < 12:
+                rgbv = hsluv.hsluv_to_rgb((hslv[0] + 10, hslv[1], hslv[2]))
+            elif i < 14:
+                rgbv = hsluv.hsluv_to_rgb((hslv[0] + 20, hslv[1], hslv[2]))
+
+            values.append(
+                (int(rgbv[0] * 255), int(rgbv[1] * 255), int(rgbv[2] * 255)),
+            )
+
+        payload = d0da.d0da_report.set_upper_rows_rgb(values, values, values)
+        self.device.send_buffer(payload)
+
+        payload = d0da.d0da_report.set_lower_rows_rgb(values, values, values)
+        self.device.send_buffer(payload)
+
+    def mouse(self):
+        """
+        Mouse mode (disable time of day)
+        """
+        self.do_time_of_day = False
+
+    async def run(self) -> None:
+        """
+        Main loop
+        """
+        while 1:
+            await asyncio.sleep(60)
+            if self.do_time_of_day:
+                self.time_of_day()
 
 
 def main():
@@ -132,9 +207,12 @@ def main():
 
     mouse = Mouse(state, device)
 
+    rgb_lighting = RGBLighting(device)
+
     tasks = asyncio.gather(
         mouse.run(),
-        gamepad(wooting_gamepad, state, mouse),
+        gamepad(wooting_gamepad, state, mouse, rgb_lighting),
+        rgb_lighting.run(),
     )
 
     loop = asyncio.get_event_loop()
