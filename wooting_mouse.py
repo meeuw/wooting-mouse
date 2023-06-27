@@ -42,21 +42,23 @@ class Mouse:
         """
         value = self.state[evdev.ecodes.ecodes["EV_ABS"]][from_event]
 
-        # abs_value = abs(value)
-        # if abs_value > 10:
-        #    if value < 0:
-        #        direction = -1
-        #    else:
-        #        direction = 1
-        #    value = int(0.0000000000000000005 * pow(abs_value, 4.5) + 1)
-        #    self.ui_mouse.write(
-        #        evdev.ecodes.ecodes["EV_REL"], to_event, value * direction
-        #    )
-        self.ui_mouse.write(
-            evdev.ecodes.ecodes["EV_REL"],
-            to_event,
-            int(math.tan(value * (math.pi / 2) / 33000) * 20),
-        )
+        if True:
+            abs_value = abs(value)
+            if abs_value > 10:
+                if value < 0:
+                    direction = -1
+                else:
+                    direction = 1
+                value = int(0.0000000000000000005 * pow(abs_value, 4.5) + 1)
+                self.ui_mouse.write(
+                    evdev.ecodes.ecodes["EV_REL"], to_event, value * direction
+                )
+        if False:
+            self.ui_mouse.write(
+                evdev.ecodes.ecodes["EV_REL"],
+                to_event,
+                int(math.tan(value * (math.pi / 2) / 33000) * 20),
+            )
 
     def write(self, typ: int, code: int, value: int) -> None:
         """
@@ -136,6 +138,7 @@ class RGBLighting:
     """
     RGB Lighting
     """
+
     def __init__(self, device):
         self.device = device
         self.time_of_day()
