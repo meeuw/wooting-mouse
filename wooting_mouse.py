@@ -42,7 +42,7 @@ class Mouse:
         """
         value = self.state[evdev.ecodes.ecodes["EV_ABS"]][from_event]
 
-        if True:
+        if False:
             abs_value = abs(value)
             if abs_value > 10:
                 if value < 0:
@@ -53,11 +53,11 @@ class Mouse:
                 self.ui_mouse.write(
                     evdev.ecodes.ecodes["EV_REL"], to_event, value * direction
                 )
-        if False:
+        if True:
             self.ui_mouse.write(
                 evdev.ecodes.ecodes["EV_REL"],
                 to_event,
-                int(math.tan(value * (math.pi / 2) / 33000) * 20),
+                int(math.tan(value * (math.pi / 2) / 34000) * 10),
             )
 
     def write(self, typ: int, code: int, value: int) -> None:
