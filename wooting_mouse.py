@@ -28,7 +28,8 @@ class Mouse:
         self.ui_mouse = evdev.UInput(
             evdev.util.find_ecodes_by_regex(
                 r"(REL_X|REL_Y|REL_WHEEL|REL_WHEEL_HI_RES|"
-                r"BTN_RIGHT|BTN_MIDDLE|BTN_LEFT|KEY_CAPSLOCK)$"
+                r"BTN_RIGHT|BTN_MIDDLE|BTN_LEFT|KEY_CAPSLOCK|"
+                r"KEY_LEFTCTRL|KEY_LEFTALT)$"
             )
         )
         self.state = state
@@ -118,7 +119,11 @@ async def gamepad(wooting_gamepad, state, mouse, rgb_lighting):
                 evdev.ecodes.ecodes["KEY_CAPSLOCK"],
                 event.value,
             )
-        if event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_EAST"]:
+        elif event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_TL"]:
+            mouse.write(ev_key, evdev.ecodes.ecodes["KEY_LEFTCTRL"], event.value)
+        elif event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_TR"]:
+            mouse.write(ev_key, evdev.ecodes.ecodes["KEY_LEFTALT"], event.value)
+        elif event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_EAST"]:
             mouse.write(ev_key, evdev.ecodes.ecodes["BTN_LEFT"], event.value)
         elif event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_NORTH"]:
             mouse.write(ev_key, evdev.ecodes.ecodes["BTN_MIDDLE"], event.value)
