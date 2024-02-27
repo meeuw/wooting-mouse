@@ -1,9 +1,9 @@
 [tool.poetry]
 name = "wooting-mouse"
-version = "0.1.0"
+version = "0.1.1"
 description = "Use Wooting Gamepad as Virtual Mouse"
 authors = ["Dick Marinus"]
-license = "GPL-v3"
+license = "GPL-3.0"
 
 [tool.poetry.dependencies]
 python = "^3.11"
