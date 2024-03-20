@@ -30,7 +30,8 @@ class Mouse:
                 r"(REL_X|REL_Y|REL_WHEEL|REL_WHEEL_HI_RES|"
                 r"BTN_RIGHT|BTN_MIDDLE|BTN_LEFT|KEY_CAPSLOCK|"
                 r"KEY_LEFTCTRL|KEY_LEFTALT)$"
-            )
+            ),
+            name="Wooting Virtual Mouse for Gamepad",
         )
         self.state = state
         self.device = device
