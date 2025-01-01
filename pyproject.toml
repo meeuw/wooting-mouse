@@ -6,7 +6,7 @@ authors = ["Dick Marinus"]
 license = "GPL-3.0"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.13"
 pyudev = "^0.24.1"
 evdev = "^1.6.1"
 d0da = {extras = ["linux"], version = ">0.3.0"}
