@@ -27,9 +27,9 @@ class Mouse:
     def __init__(self, state, device):
         self.ui_mouse = evdev.UInput(
             evdev.util.find_ecodes_by_regex(
-                r"(REL_X|REL_Y|REL_WHEEL|REL_WHEEL_HI_RES|"
-                r"BTN_RIGHT|BTN_MIDDLE|BTN_LEFT|KEY_CAPSLOCK|"
-                r"KEY_LEFTCTRL|KEY_LEFTALT)$"
+                r"(REL_X|REL_Y|REL_WHEEL|REL_WHEEL_HI_RES|REL_HWHEEL|"
+                r"REL_HWHEEL_HI_RES|BTN_RIGHT|BTN_MIDDLE|BTN_LEFT|"
+                r"KEY_CAPSLOCK|KEY_LEFTCTRL|KEY_LEFTALT|BTN_BACK|BTN_FORWARD)$"
             ),
             name="Wooting Virtual Mouse for Gamepad",
         )
@@ -44,23 +44,11 @@ class Mouse:
         """
         value = self.state[evdev.ecodes.ecodes["EV_ABS"]][from_event]
 
-        if False:
-            abs_value = abs(value)
-            if abs_value > 10:
-                if value < 0:
-                    direction = -1
-                else:
-                    direction = 1
-                value = int(0.0000000000000000005 * pow(abs_value, 4.5) + 1)
-                self.ui_mouse.write(
-                    evdev.ecodes.ecodes["EV_REL"], to_event, value * direction
-                )
-        if True:
-            self.ui_mouse.write(
-                evdev.ecodes.ecodes["EV_REL"],
-                to_event,
-                int(math.tan(value * (math.pi / 2) / 34000) * 10),
-            )
+        self.ui_mouse.write(
+            evdev.ecodes.ecodes["EV_REL"],
+            to_event,
+            int(math.tan(value * (math.pi / 2) / 34000) * 10),
+        )
 
     def write(self, typ: int, code: int, value: int) -> None:
         """
@@ -80,6 +68,9 @@ class Mouse:
 
             self.handle(evdev.ecodes.ecodes["ABS_X"], evdev.ecodes.ecodes["REL_X"])
             self.handle(evdev.ecodes.ecodes["ABS_Y"], evdev.ecodes.ecodes["REL_Y"])
+            self.handle(
+                evdev.ecodes.ecodes["ABS_RX"], evdev.ecodes.ecodes["REL_HWHEEL_HI_RES"]
+            )
             self.handle(
                 evdev.ecodes.ecodes["ABS_RY"], evdev.ecodes.ecodes["REL_WHEEL_HI_RES"]
             )
@@ -107,6 +98,12 @@ async def gamepad(wooting_gamepad, state, mouse, rgb_lighting):
     Watch Gamepad events
     """
     ev_key = evdev.ecodes.ecodes["EV_KEY"]
+    ev_abs = evdev.ecodes.ecodes["EV_ABS"]
+
+    pressed_keys = {
+        evdev.ecodes.ecodes["BTN_BACK"]: False,
+        evdev.ecodes.ecodes["BTN_FORWARD"]: False,
+    }
 
     async for event in wooting_gamepad.async_read_loop():
         if event.value > 0:
@@ -138,6 +135,19 @@ async def gamepad(wooting_gamepad, state, mouse, rgb_lighting):
             mouse.disable()
             time.sleep(0.1)
             rgb_lighting.time_of_day()
+        elif event.type == ev_abs and event.code == evdev.ecodes.ecodes["ABS_HAT0X"]:
+            if event.value == 0:
+                for pressed_key, pressed in pressed_keys.items():
+                    if pressed:
+                        mouse.write(ev_key, pressed_key, 0)
+                        pressed_keys[pressed_key] = False
+            else:
+                if event.value < 0:
+                    pressed_key = evdev.ecodes.ecodes["BTN_BACK"]
+                else:
+                    pressed_key = evdev.ecodes.ecodes["BTN_FORWARD"]
+                mouse.write(ev_key, pressed_key, 1)
+                pressed_keys[pressed_key] = True
 
 
 class RGBLighting:
