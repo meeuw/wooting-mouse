@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "wooting-mouse"
-version = "0.3.1"
+version = "0.4.0"
 description = "Use Wooting Gamepad as Virtual Mouse"
 authors = ["Dick Marinus"]
 license = "GPL-3.0"
@@ -17,7 +17,8 @@ hsluv = "^5.0.3"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
-pylint = "^2.17.4"
+pytest = "^8.3.4"
+pylint = "^3.3.3"
 
 [build-system]
 requires = ["poetry-core"]

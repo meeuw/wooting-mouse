@@ -93,7 +93,14 @@ class Mouse:
         self.enable_event.clear()
 
 
-async def gamepad(wooting_gamepad, state, mouse, rgb_lighting):
+async def gamepad(
+    wooting_gamepad,
+    state,
+    mouse,
+    rgb_lighting,
+    ev_key_mouse_write_map,
+    ev_abs_mouse_write_map,
+):
     """
     Watch Gamepad events
     """
@@ -111,22 +118,12 @@ async def gamepad(wooting_gamepad, state, mouse, rgb_lighting):
             rgb_lighting.mouse()
         state[event.type][event.code] = event.value
 
-        if event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_SOUTH"]:
+        if event.type == ev_key and event.code in ev_key_mouse_write_map:
             mouse.write(
                 ev_key,
-                evdev.ecodes.ecodes["KEY_CAPSLOCK"],
+                evdev.ecodes.ecodes[ev_key_mouse_write_map[event.code]],
                 event.value,
             )
-        elif event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_TL"]:
-            mouse.write(ev_key, evdev.ecodes.ecodes["KEY_LEFTCTRL"], event.value)
-        elif event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_TR"]:
-            mouse.write(ev_key, evdev.ecodes.ecodes["KEY_LEFTALT"], event.value)
-        elif event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_EAST"]:
-            mouse.write(ev_key, evdev.ecodes.ecodes["BTN_LEFT"], event.value)
-        elif event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_NORTH"]:
-            mouse.write(ev_key, evdev.ecodes.ecodes["BTN_MIDDLE"], event.value)
-        elif event.type == ev_key and event.code == evdev.ecodes.ecodes["BTN_WEST"]:
-            mouse.write(ev_key, evdev.ecodes.ecodes["BTN_RIGHT"], event.value)
         elif (
             event.type == ev_key
             and event.code == evdev.ecodes.ecodes["BTN_START"]
@@ -135,7 +132,7 @@ async def gamepad(wooting_gamepad, state, mouse, rgb_lighting):
             mouse.disable()
             time.sleep(0.1)
             rgb_lighting.time_of_day()
-        elif event.type == ev_abs and event.code == evdev.ecodes.ecodes["ABS_HAT0X"]:
+        elif event.type == ev_abs and event.code in ev_abs_mouse_write_map:
             if event.value == 0:
                 for pressed_key, pressed in pressed_keys.items():
                     if pressed:
@@ -143,9 +140,13 @@ async def gamepad(wooting_gamepad, state, mouse, rgb_lighting):
                         pressed_keys[pressed_key] = False
             else:
                 if event.value < 0:
-                    pressed_key = evdev.ecodes.ecodes["BTN_BACK"]
+                    pressed_key = evdev.ecodes.ecodes[
+                        ev_abs_mouse_write_map[event.code][0]
+                    ]
                 else:
-                    pressed_key = evdev.ecodes.ecodes["BTN_FORWARD"]
+                    pressed_key = evdev.ecodes.ecodes[
+                        ev_abs_mouse_write_map[event.code][1]
+                    ]
                 mouse.write(ev_key, pressed_key, 1)
                 pressed_keys[pressed_key] = True
 
@@ -230,7 +231,21 @@ def main():
 
     tasks = asyncio.gather(
         mouse.run(),
-        gamepad(wooting_gamepad, state, mouse, rgb_lighting),
+        gamepad(
+            wooting_gamepad,
+            state,
+            mouse,
+            rgb_lighting,
+            {
+                evdev.ecodes.ecodes["BTN_SOUTH"]: "KEY_CAPSLOCK",
+                evdev.ecodes.ecodes["BTN_TL"]: "KEY_LEFTCTRL",
+                evdev.ecodes.ecodes["BTN_TR"]: "KEY_LEFTALT",
+                evdev.ecodes.ecodes["BTN_EAST"]: "BTN_LEFT",
+                evdev.ecodes.ecodes["BTN_NORTH"]: "BTN_MIDDLE",
+                evdev.ecodes.ecodes["BTN_WEST"]: "BTN_RIGHT",
+            },
+            {evdev.ecodes.ecodes["ABS_HAT0X"]: ("BTN_BACK", "BTN_FORWARD")},
+        ),
         rgb_lighting.run(),
     )
 
