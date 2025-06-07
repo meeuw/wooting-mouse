@@ -8,6 +8,33 @@ import wooting_mouse
 import evdev
 import collections
 
+CONFIG = {
+    "mouse": {
+        "ev_abs_mouse_write_map": {
+            evdev.ecodes.ecodes["ABS_X"]: evdev.ecodes.ecodes["REL_X"],
+            evdev.ecodes.ecodes["ABS_Y"]: evdev.ecodes.ecodes["REL_Y"],
+            evdev.ecodes.ecodes["ABS_RX"]: evdev.ecodes.ecodes["REL_HWHEEL_HI_RES"],
+            evdev.ecodes.ecodes["ABS_RY"]: evdev.ecodes.ecodes["REL_WHEEL_HI_RES"],
+        }
+    },
+    "gamepad": {
+        "ev_key_mouse_write_map": {
+            evdev.ecodes.ecodes["BTN_SOUTH"]: evdev.ecodes.ecodes["KEY_CAPSLOCK"],
+            evdev.ecodes.ecodes["BTN_TL"]: evdev.ecodes.ecodes["KEY_LEFTCTRL"],
+            evdev.ecodes.ecodes["BTN_TR"]: evdev.ecodes.ecodes["KEY_LEFTALT"],
+            evdev.ecodes.ecodes["BTN_EAST"]: evdev.ecodes.ecodes["BTN_LEFT"],
+            evdev.ecodes.ecodes["BTN_NORTH"]: evdev.ecodes.ecodes["BTN_MIDDLE"],
+            evdev.ecodes.ecodes["BTN_WEST"]: evdev.ecodes.ecodes["BTN_RIGHT"],
+        },
+        "ev_abs_mouse_write_map": {
+            evdev.ecodes.ecodes["ABS_HAT0X"]: (
+                evdev.ecodes.ecodes["BTN_BACK"],
+                evdev.ecodes.ecodes["BTN_FORWARD"],
+            )
+        },
+    },
+}
+
 
 class FakeInputDevice:
     def __init__(self, queue):
@@ -42,8 +69,7 @@ class Test(IsolatedAsyncioTestCase):
             self.state,
             self.mouse,
             self.rgb_lighting,
-            {evdev.ecodes.ecodes["BTN_SOUTH"]: "KEY_CAPSLOCK"},
-            {evdev.ecodes.ecodes["ABS_HAT0X"]: ("BTN_BACK", "BTN_FORWARD")},
+            CONFIG
         )
 
 

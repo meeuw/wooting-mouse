@@ -24,31 +24,45 @@ class Mouse:
     Virtual Mouse
     """
 
-    def __init__(self, state, device):
-        self.ui_mouse = evdev.UInput(
-            evdev.util.find_ecodes_by_regex(
-                r"(REL_X|REL_Y|REL_WHEEL|REL_WHEEL_HI_RES|REL_HWHEEL|"
-                r"REL_HWHEEL_HI_RES|BTN_RIGHT|BTN_MIDDLE|BTN_LEFT|"
-                r"KEY_CAPSLOCK|KEY_LEFTCTRL|KEY_LEFTALT|BTN_BACK|BTN_FORWARD)$"
-            ),
-            name="Wooting Virtual Mouse for Gamepad",
-        )
+    def __init__(self, state, device, config):
+        self.open()
         self.state = state
         self.device = device
+        self.config = config
         self.enabled = False
         self.enable_event = asyncio.Event()
 
-    def handle(self, from_event, to_event):
-        """
-        Handle event, translate analog keypress to relative movement
-        """
-        value = self.state[evdev.ecodes.ecodes["EV_ABS"]][from_event]
 
-        self.ui_mouse.write(
-            evdev.ecodes.ecodes["EV_REL"],
-            to_event,
-            int(math.tan(value * (math.pi / 2) / 34000) * 10),
-        )
+    def open(self):
+        """
+        Start Wooting Virtual Mouse for Gamepad
+        """
+        cap = {
+            evdev.ecodes.ecodes["EV_REL"]: list(
+                self.config["mouse"]["ev_abs_mouse_write_map"].values()
+            ),
+            evdev.ecodes.ecodes["EV_KEY"]: list(
+                self.config["gamepad"]["ev_key_mouse_write_map"].values()
+            ),
+        }
+
+        for value in self.config["gamepad"]["ev_abs_mouse_write_map"].values():
+            cap[evdev.ecodes.ecodes["EV_KEY"]] += value
+
+        if (
+            evdev.ecodes.ecodes["REL_WHEEL_HI_RES"]
+            in cap[evdev.ecodes.ecodes["EV_REL"]]
+        ):
+            cap[evdev.ecodes.ecodes["EV_REL"]].append(evdev.ecodes.ecodes["REL_WHEEL"])
+
+        if (
+            evdev.ecodes.ecodes["REL_HWHEEL_HI_RES"]
+            in cap[evdev.ecodes.ecodes["EV_REL"]]
+        ):
+            cap[evdev.ecodes.ecodes["EV_REL"]].append(evdev.ecodes.ecodes["REL_HWHEEL"])
+
+        self.ui_mouse = evdev.UInput(cap, name="Wooting Virtual Mouse for Gamepad")
+
 
     def write(self, typ: int, code: int, value: int) -> None:
         """
@@ -66,14 +80,21 @@ class Mouse:
             else:
                 await self.enable_event.wait()
 
-            self.handle(evdev.ecodes.ecodes["ABS_X"], evdev.ecodes.ecodes["REL_X"])
-            self.handle(evdev.ecodes.ecodes["ABS_Y"], evdev.ecodes.ecodes["REL_Y"])
-            self.handle(
-                evdev.ecodes.ecodes["ABS_RX"], evdev.ecodes.ecodes["REL_HWHEEL_HI_RES"]
-            )
-            self.handle(
-                evdev.ecodes.ecodes["ABS_RY"], evdev.ecodes.ecodes["REL_WHEEL_HI_RES"]
-            )
+            for from_event, to_event in self.config["mouse"][
+                "ev_abs_mouse_write_map"
+            ].items():
+                self.ui_mouse.write(
+                    evdev.ecodes.ecodes["EV_REL"],
+                    to_event,
+                    int(
+                        math.tan(
+                            self.state[evdev.ecodes.ecodes["EV_ABS"]][from_event]
+                            * (math.pi / 2)
+                            / 34000
+                        )
+                        * 10
+                    ),
+                )
 
             self.ui_mouse.syn()
 
@@ -93,19 +114,15 @@ class Mouse:
         self.enable_event.clear()
 
 
-async def gamepad(
-    wooting_gamepad,
-    state,
-    mouse,
-    rgb_lighting,
-    ev_key_mouse_write_map,
-    ev_abs_mouse_write_map,
-):
+async def gamepad(wooting_gamepad, state, mouse, rgb_lighting, config):
     """
     Watch Gamepad events
     """
     ev_key = evdev.ecodes.ecodes["EV_KEY"]
     ev_abs = evdev.ecodes.ecodes["EV_ABS"]
+
+    ev_key_mouse_write_map = config["gamepad"]["ev_key_mouse_write_map"]
+    ev_abs_mouse_write_map = config["gamepad"]["ev_abs_mouse_write_map"]
 
     pressed_keys = {
         evdev.ecodes.ecodes["BTN_BACK"]: False,
@@ -119,14 +136,10 @@ async def gamepad(
         state[event.type][event.code] = event.value
 
         if event.type == ev_key and event.code in ev_key_mouse_write_map:
-            mouse.write(
-                ev_key,
-                evdev.ecodes.ecodes[ev_key_mouse_write_map[event.code]],
-                event.value,
-            )
+            mouse.write(ev_key, ev_key_mouse_write_map[event.code], event.value)
         elif (
             event.type == ev_key
-            and event.code == evdev.ecodes.ecodes["BTN_START"]
+            and event.code == config["gamepad"]["mouse_disable"]
             and event.value > 0
         ):
             mouse.disable()
@@ -140,13 +153,9 @@ async def gamepad(
                         pressed_keys[pressed_key] = False
             else:
                 if event.value < 0:
-                    pressed_key = evdev.ecodes.ecodes[
-                        ev_abs_mouse_write_map[event.code][0]
-                    ]
+                    pressed_key = ev_abs_mouse_write_map[event.code][0]
                 else:
-                    pressed_key = evdev.ecodes.ecodes[
-                        ev_abs_mouse_write_map[event.code][1]
-                    ]
+                    pressed_key = ev_abs_mouse_write_map[event.code][1]
                 mouse.write(ev_key, pressed_key, 1)
                 pressed_keys[pressed_key] = True
 
@@ -225,27 +234,41 @@ def main():
     }
     device = d0da_device.get_device("/".join(sys.argv[1].split("/")[:-4]))
 
-    mouse = Mouse(state, device)
+    config = {
+        "mouse": {
+            "ev_abs_mouse_write_map": {
+                evdev.ecodes.ecodes["ABS_X"]: evdev.ecodes.ecodes["REL_X"],
+                evdev.ecodes.ecodes["ABS_Y"]: evdev.ecodes.ecodes["REL_Y"],
+                evdev.ecodes.ecodes["ABS_RX"]: evdev.ecodes.ecodes["REL_HWHEEL_HI_RES"],
+                evdev.ecodes.ecodes["ABS_RY"]: evdev.ecodes.ecodes["REL_WHEEL_HI_RES"],
+            }
+        },
+        "gamepad": {
+            "ev_key_mouse_write_map": {
+                evdev.ecodes.ecodes["BTN_SOUTH"]: evdev.ecodes.ecodes["KEY_CAPSLOCK"],
+                evdev.ecodes.ecodes["BTN_TL"]: evdev.ecodes.ecodes["KEY_LEFTCTRL"],
+                evdev.ecodes.ecodes["BTN_TR"]: evdev.ecodes.ecodes["KEY_LEFTALT"],
+                evdev.ecodes.ecodes["BTN_EAST"]: evdev.ecodes.ecodes["BTN_LEFT"],
+                evdev.ecodes.ecodes["BTN_NORTH"]: evdev.ecodes.ecodes["BTN_MIDDLE"],
+                evdev.ecodes.ecodes["BTN_WEST"]: evdev.ecodes.ecodes["BTN_RIGHT"],
+            },
+            "ev_abs_mouse_write_map": {
+                evdev.ecodes.ecodes["ABS_HAT0X"]: (
+                    evdev.ecodes.ecodes["BTN_BACK"],
+                    evdev.ecodes.ecodes["BTN_FORWARD"],
+                )
+            },
+            "mouse_disable": evdev.ecodes.ecodes["BTN_START"],
+        },
+    }
+
+    mouse = Mouse(state, device, config)
 
     rgb_lighting = RGBLighting(device)
 
     tasks = asyncio.gather(
         mouse.run(),
-        gamepad(
-            wooting_gamepad,
-            state,
-            mouse,
-            rgb_lighting,
-            {
-                evdev.ecodes.ecodes["BTN_SOUTH"]: "KEY_CAPSLOCK",
-                evdev.ecodes.ecodes["BTN_TL"]: "KEY_LEFTCTRL",
-                evdev.ecodes.ecodes["BTN_TR"]: "KEY_LEFTALT",
-                evdev.ecodes.ecodes["BTN_EAST"]: "BTN_LEFT",
-                evdev.ecodes.ecodes["BTN_NORTH"]: "BTN_MIDDLE",
-                evdev.ecodes.ecodes["BTN_WEST"]: "BTN_RIGHT",
-            },
-            {evdev.ecodes.ecodes["ABS_HAT0X"]: ("BTN_BACK", "BTN_FORWARD")},
-        ),
+        gamepad(wooting_gamepad, state, mouse, rgb_lighting, config),
         rgb_lighting.run(),
     )
 
