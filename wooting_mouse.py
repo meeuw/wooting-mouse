@@ -8,6 +8,7 @@ import sys
 import math
 import colorsys
 import time
+import os
 
 import d0da.device_linux as d0da_device
 import d0da.d0da_feature
@@ -37,6 +38,10 @@ class Mouse:
         self.device = device
         self.enabled = False
         self.enable_event = asyncio.Event()
+        self.speed = 10
+        self.sleep = 0.05
+        self.config_mtime = None
+        self.config_reload = 1 / self.sleep
 
     def handle(self, from_event, to_event):
         """
@@ -47,7 +52,7 @@ class Mouse:
         self.ui_mouse.write(
             evdev.ecodes.ecodes["EV_REL"],
             to_event,
-            int(math.tan(value * (math.pi / 2) / 34000) * 10),
+            int(math.tan(value * (math.pi / 2) / 34000) * self.speed),
         )
 
     def write(self, typ: int, code: int, value: int) -> None:
@@ -60,11 +65,26 @@ class Mouse:
         """
         Main loop
         """
+        counter = 0
         while True:
             if self.enabled:
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(self.sleep)
             else:
                 await self.enable_event.wait()
+
+            if counter % self.config_reload == 0:
+                try:
+                    new_mtime = os.lstat('/etc/wooting-mouse.conf').st_mtime
+                except FileNotFoundError:
+                    pass
+                else:
+                    if new_mtime != self.config_mtime:
+                        with open('/etc/wooting-mouse.conf', encoding='utf8') as f:
+                            speed, sleep = f.read().split('\n')[:2]
+                        self.speed = int(speed)
+                        self.sleep = float(sleep)
+                        self.config_reload = 1 / self.sleep
+                        self.config_mtime = new_mtime
 
             self.handle(evdev.ecodes.ecodes["ABS_X"], evdev.ecodes.ecodes["REL_X"])
             self.handle(evdev.ecodes.ecodes["ABS_Y"], evdev.ecodes.ecodes["REL_Y"])
@@ -76,6 +96,7 @@ class Mouse:
             )
 
             self.ui_mouse.syn()
+            counter += 1
 
     def enable(self):
         """
